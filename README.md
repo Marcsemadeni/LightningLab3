@@ -206,6 +206,111 @@ docker compose down
 
 ---
 
+## Beyond This Lab — CI/CD Pipelines and Real Production
+
+In this lab, `docker-compose.yml` plays the role of "the thing that sets environment variables."
+In real production, that role belongs to your CI/CD pipeline and cloud platform.
+Your `Program.cs` does not change — it still just reads from `builder.Configuration`.
+Only who injects the variables changes.
+
+### CI/CD Pipeline (GitHub Actions)
+
+A pipeline knows which environment to target because you configure it explicitly.
+Secrets are stored in the platform's vault — never in the repo.
+
+```yaml
+# .github/workflows/deploy.yml
+
+jobs:
+  deploy-staging:
+    environment: staging
+    steps:
+      - name: Deploy to staging
+        env:
+          ASPNETCORE_ENVIRONMENT: Staging
+          ConnectionStrings__DefaultConnection: ${{ secrets.STAGING_DB_CONNECTION }}
+        run: ./deploy.sh
+
+  deploy-production:
+    environment: production
+    steps:
+      - name: Deploy to production
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          ConnectionStrings__DefaultConnection: ${{ secrets.PROD_DB_CONNECTION }}
+        run: ./deploy.sh
+```
+
+`secrets.STAGING_DB_CONNECTION` and `secrets.PROD_DB_CONNECTION` are stored in
+GitHub's secrets vault (repo → Settings → Secrets and variables → Actions).
+They are injected at runtime and never appear in the repo or logs.
+
+A typical flow looks like this:
+
+```
+push to main
+  → build Docker image
+  → deploy to staging   (ASPNETCORE_ENVIRONMENT=Staging,     staging secrets)
+  → manual approval
+  → deploy to production (ASPNETCORE_ENVIRONMENT=Production, production secrets)
+```
+
+The same Docker image is promoted through environments.
+The image never changes — only the variables injected at deploy time change.
+
+### Cloud Platforms
+
+Each platform has its own way of storing and injecting variables,
+but the result is always the same: env vars arrive in your container at startup.
+
+**Azure App Service** — Portal → Configuration → Application Settings:
+```
+ASPNETCORE_ENVIRONMENT               = Production
+ConnectionStrings__DefaultConnection = Host=prod.postgres.database.azure.com;...
+```
+Sensitive values can reference Azure Key Vault directly so the password never
+appears in the portal UI:
+```
+@Microsoft.KeyVault(SecretUri=https://myvault.vault.azure.net/secrets/db-connection)
+```
+
+**AWS ECS** — Task definition references Secrets Manager:
+```json
+"secrets": [
+  {
+    "name": "ConnectionStrings__DefaultConnection",
+    "valueFrom": "arn:aws:secretsmanager:us-east-1:123:secret:prod/db"
+  }
+]
+```
+AWS fetches the secret at container startup and injects it as an env var.
+
+**Kubernetes** — A `Secret` object in the cluster, referenced by the deployment:
+```yaml
+env:
+  - name: ConnectionStrings__DefaultConnection
+    valueFrom:
+      secretKeyRef:
+        name: db-secret
+        key: connection-string
+```
+
+### Where secrets live across environments
+
+| Environment | Who sets the variables | Where secrets are stored |
+|---|---|---|
+| Local dev | `docker-compose.yml` reads `.env` | `.env` file (never committed) |
+| CI/CD pipeline | GitHub Actions job config | GitHub repository secrets |
+| Azure | App Service Application Settings | Azure Key Vault |
+| AWS | ECS task definition | AWS Secrets Manager |
+| Kubernetes | Deployment YAML | Kubernetes Secret objects |
+
+In every case, `Program.cs` calls `builder.Configuration.GetConnectionString(...)`
+and has no idea which platform put the value there.
+That separation is what makes the same codebase deployable anywhere.
+
+---
+
 ## Instructor Notes
 
 ### What to emphasize
@@ -244,6 +349,7 @@ docker compose down
   by your cloud platform — Azure App Service, AWS ECS, Kubernetes Secrets.
   The principle is identical: one env var controls everything.
 - How would a CI/CD pipeline know which environment to target?
+  *(See the Beyond This Lab section for examples.)*
 
 ### Verifying completion
 
