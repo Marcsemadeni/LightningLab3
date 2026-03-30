@@ -263,13 +263,24 @@ The image never changes — only the variables injected at deploy time change.
 Each platform has its own way of storing and injecting variables,
 but the result is always the same: env vars arrive in your container at startup.
 
-**Azure App Service** — Portal → Configuration → Application Settings:
-```
-ASPNETCORE_ENVIRONMENT               = Production
-ConnectionStrings__DefaultConnection = Host=prod.postgres.database.azure.com;...
-```
-Sensitive values can reference Azure Key Vault directly so the password never
-appears in the portal UI:
+**Azure App Service** — in the Portal, open your App Service resource and go to
+**Settings → Environment variables → App settings tab**.
+Click **Add** and create one entry per variable:
+
+| Name | Value | Deployment slot setting |
+|---|---|---|
+| `ASPNETCORE_ENVIRONMENT` | `Production` | Check this box |
+| `ConnectionStrings__DefaultConnection` | `Host=prod.postgres...;Database=...;Password=...` | Check this box |
+
+Click **Save** — Azure will restart the app to apply the changes.
+
+> **Deployment slot setting:** Checking this box pins the value to the slot rather than
+> travelling with the app during a slot swap. Always check it for anything
+> environment-specific (environment name, connection strings, API keys) so that
+> staging and production never accidentally share the same database after a swap.
+
+Sensitive values can also reference Azure Key Vault directly so the password never
+appears in the portal UI at all:
 ```
 @Microsoft.KeyVault(SecretUri=https://myvault.vault.azure.net/secrets/db-connection)
 ```
