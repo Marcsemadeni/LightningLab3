@@ -1,6 +1,5 @@
 using LightningLab3.Components;
 using LightningLab3.Data;
-using LightningLab3.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,8 +15,6 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 // Fix this by switching the database provider based on the current environment.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
-
-builder.Services.AddScoped<RatingsService>();
 
 var app = builder.Build();
 

@@ -1,7 +1,7 @@
-# Lightning Lab 3 - Keeping Secrets Secret
+# Lightning Lab 3 - One Codebase, Two Environments
 
-**Topic:** Environment Configuration and Secrets Management (Dev vs Production)
-**Stack:** .NET 10 - Blazor Web App - EF Core - SQLite (dev) - PostgreSQL (prod) - Docker
+**Topic:** Dev vs Production — Environment Configuration
+**Stack:** .NET 10 · Blazor Web App · EF Core · SQLite (dev) · PostgreSQL (prod) · Docker
 
 ---
 
@@ -19,203 +19,89 @@
 
 ```
 LightningLab3/
-├── src/LightningLab3/               <- Blazor Web App
-│   ├── Components/Pages/Games.razor <- the page you will be fixing
-│   ├── Data/AppDbContext.cs         <- EF Core context + seed data
+├── src/LightningLab3/
+│   ├── Components/Pages/Games.razor   ← the page you will be observing
+│   ├── Data/AppDbContext.cs           ← EF Core context + seed data
 │   ├── Models/Game.cs
-│   ├── Services/RatingsService.cs   <- Bug 2 is here
-│   ├── appsettings.json             <- Bug 1 is here
-│   ├── appsettings.Development.json <- you will edit this in Step 2
-│   ├── appsettings.Production.json  <- production config (no secrets)
-│   ├── Program.cs                   <- Bug 3 is here
+│   ├── appsettings.json              ← base config (always loaded)
+│   ├── appsettings.Development.json  ← dev overrides
+│   ├── appsettings.Production.json   ← prod overrides (no secrets)
+│   ├── Program.cs                    ← Bug is here (Step 2)
 │   └── Dockerfile
-├── tests/LightningLab3.Tests/
-│   ├── SanityTests.cs               <- always green, confirms test runner works
-│   ├── RatingsServiceTests.cs       <- red until you fix Bug 2 (Step 3)
-│   └── KeyRotationTests.cs          <- red until you complete the Challenge
 ├── docker-compose.yml
-├── .env.example                     <- copy this to .env and fill in values
+├── .env.example                      ← copy this to .env before Step 3
 └── README.md
 ```
 
 ---
 
-## Step 1 - Clone and Run the Tests
+## Step 1 — Clone, Run, and Observe the Environment Banner
 
-Clone the repo, then run:
-
-```bash
-dotnet test
-```
-
-You should see:
-
-```
-Failed! -  Total: 7, Failed: 4, Succeeded: 3, Skipped: 0
-```
-
-The 4 failing tests are not accidents - they describe exactly what is broken.
-The 3 passing tests confirm your environment works. **Your goal is to get all 7 tests green.**
-
-> **Discussion:** Look at the failing test names before reading any code.
-> What do they tell you about what is wrong?
-
----
-
-## Step 2 - Find and Fix Bug 1: Wrong Connection String
-
-### Observe the crash
-
-Try to run the app:
+Clone the repo and run the app:
 
 ```bash
 dotnet run --project src/LightningLab3
 ```
 
-You will get an error similar to:
+Navigate to **http://localhost:5101/games**.
+
+You should see a **blue banner** at the top of the page showing:
 
 ```
-SqliteException: unable to open database file
+ASPNETCORE_ENVIRONMENT   Development
+Database provider        SQLite (local file — games.db)
 ```
 
-### Find the bug
+### How does the app know it is in Development?
 
-Open `src/LightningLab3/appsettings.json`.
-Look at the `ConnectionStrings` section. What is wrong with that path?
+Open `src/LightningLab3/Properties/launchSettings.json`.
 
-> **Discussion:** Why does this work on the original developer's machine but not yours?
-> What would happen if ten developers each had a different machine path?
-> What would happen if you deployed this to a server?
-
-### Fix it
-
-The correct fix is to **remove** the broken path from `appsettings.json` and add
-an environment-specific override in `appsettings.Development.json`.
-
-.NET loads config in layers:
-
-```
-appsettings.json                         <- base defaults (loaded always)
-  └── appsettings.{Environment}.json     <- overrides for this specific environment
-        └── environment variables        <- highest priority, overrides everything
-```
-
-**1.** In `appsettings.json`, remove (or comment out) the `ConnectionStrings` block.
-
-**2.** Open `src/LightningLab3/appsettings.Development.json` and add a connection string
-that uses a **relative path** (no hardcoded drive or username):
+You will see:
 
 ```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Data Source=games.db"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  }
+"environmentVariables": {
+  "ASPNETCORE_ENVIRONMENT": "Development"
 }
 ```
 
-**3.** Run the app again:
+This file is only used when you run the app locally (`dotnet run` or the IDE Run button).
+It is **never deployed** — which is how the app gets a different environment in Docker.
 
-```bash
-dotnet run --project src/LightningLab3
+### The config loading chain
+
+.NET merges config in this order (later entries override earlier ones):
+
+```
+appsettings.json                     ← base defaults, always loaded
+  └── appsettings.{Environment}.json ← overrides for this specific environment
+        └── Environment variables    ← highest priority, overrides everything
 ```
 
-Navigate to **http://localhost:5101/games** - you should see the Game Library page with data.
-Notice the blue banner showing `Development` environment and `SQLite`.
+Because `ASPNETCORE_ENVIRONMENT=Development`, the app merges `appsettings.Development.json`
+on top of `appsettings.json`. When running in Docker it will be `Production`, so
+`appsettings.Production.json` is merged instead.
 
-> **Discussion:** Why is `appsettings.Development.json` safe to commit but `appsettings.json`
-> with a hardcoded absolute path is not?
+> **Discussion:** Open both `appsettings.Development.json` and `appsettings.Production.json`.
+> What is different between them? What stays the same?
 
 ---
 
-## Step 3 - Find and Fix Bug 2: Hardcoded API Key
+## Step 2 — Find the Bug: Wrong Database Provider
 
-### Observe the failing tests
+The app currently uses SQLite in both dev and production.
+That works fine locally, but production uses PostgreSQL — and SQLite cannot parse a
+PostgreSQL connection string.
 
-```bash
-dotnet test
-```
-
-The `RatingsServiceTests` still fail. Read the failure messages - they tell you exactly
-which file to open and what to look for.
-
-### Find the bug
-
-Open `src/LightningLab3/Services/RatingsService.cs`.
-
-You will find this near the top:
+Open `src/LightningLab3/Program.cs` and find the TODO:
 
 ```csharp
-private const string ApiKey = "sk-ratings-abc123-hardcoded";
+// TODO (Lab - Step 4): This always uses SQLite — even when running in Docker against PostgreSQL.
+// Fix this by switching the database provider based on the current environment.
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite(connectionString));
 ```
 
-The constructor receives `IConfiguration` but never uses it for the key.
-
-> **Discussion:**
-> - This key is now in git history. Even if you delete it in a future commit,
->   anyone can run `git log -p` and find it. How would you clean that up?
-> - What if a teammate accidentally pushed this to a public GitHub repo?
-
-### Fix it
-
-**1.** Remove the `private const string ApiKey` line.
-
-**2.** Update `GetApiKey()` to read from `IConfiguration`:
-
-```csharp
-public string GetApiKey() =>
-    _configuration["RatingsApi:ApiKey"]
-        ?? throw new InvalidOperationException("RatingsApi:ApiKey is not configured.");
-```
-
-**3.** Update `ValidateApiKey()` to call `GetApiKey()`:
-
-```csharp
-public bool ValidateApiKey(string key) => key == GetApiKey();
-```
-
-### Store the key with dotnet user-secrets
-
-User secrets are stored **outside** the project directory in your OS user profile.
-They never touch the git repo.
-
-```bash
-cd src/LightningLab3
-
-# Initialize user-secrets for this project (only needed once per machine)
-dotnet user-secrets init
-
-# Set the development API key
-dotnet user-secrets set "RatingsApi:ApiKey" "sk-dev-local-testing-key"
-```
-
-**4.** Run the tests:
-
-```bash
-dotnet test
-```
-
-Expected result:
-
-```
-Failed! -  Total: 7, Failed: 2, Succeeded: 5, Skipped: 0
-```
-
-**5.** Run the app and navigate to **http://localhost:5101/games**.
-The "Ratings API key" row should now show **Configured**.
-
-> **Discussion:** Where are user-secrets actually stored on disk?
-> Run `dotnet user-secrets list` to see what is set.
-> On Windows: `%APPDATA%\Microsoft\UserSecrets\{guid}\secrets.json`
-
----
-
-## Step 4 - Find and Fix Bug 3: Wrong Database Provider in Docker
+**Don't fix it yet.** First, watch it fail.
 
 ### Create your .env file
 
@@ -223,41 +109,33 @@ The "Ratings API key" row should now show **Configured**.
 cp .env.example .env
 ```
 
-Open `.env` and fill in the values:
+Open `.env` — the default `DB_PASSWORD=devpassword` is fine for local use.
 
-```
-DB_PASSWORD=devpassword
-RATINGS_API_KEY=sk-dev-local-testing-key
-```
-
-> `.env` is in `.gitignore` and will never be committed.
-
-### Observe the crash in Docker
+### Run in Docker and observe the crash
 
 ```bash
 docker compose up --build
 ```
 
-Watch the logs. The app will crash - SQLite is trying to interpret a PostgreSQL
-connection string as a file path.
+Watch the logs. The app will crash with an error similar to:
 
-> **Discussion:** Why does `ASPNETCORE_ENVIRONMENT=Production` cause a different connection
-> string to be used? Trace the config loading order from `docker-compose.yml` through
-> `appsettings.Production.json` to `Program.cs`.
-
-### Find the bug
-
-Open `src/LightningLab3/Program.cs`. You will find:
-
-```csharp
-// TODO (Lab - Step 4): This always uses SQLite
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(connectionString));
+```
+ArgumentException: Format of the initialization string does not conform to specification...
 ```
 
-### Fix it
+SQLite is trying to interpret the PostgreSQL connection string (`Host=db;Database=...`)
+as a file path. That is the bug.
 
-Replace the single `AddDbContext` call with an environment check:
+> **Discussion:** Trace why Docker gets a different connection string than `dotnet run`.
+> Start at `docker-compose.yml` → `ConnectionStrings__DefaultConnection` →
+> `appsettings.Production.json` → `appsettings.json` → `Program.cs`.
+> (Note: `__` double-underscore in env var names maps to `:` in .NET config keys.)
+
+---
+
+## Step 3 — Fix It and Run in Production
+
+Replace the single hardcoded `AddDbContext` call with an environment check:
 
 ```csharp
 if (builder.Environment.IsDevelopment())
@@ -272,7 +150,7 @@ else
 }
 ```
 
-### Run in Docker
+Run in Docker again:
 
 ```bash
 docker compose up --build
@@ -280,100 +158,47 @@ docker compose up --build
 
 Wait for the `db` health check to pass, then open **http://localhost:8080/games**.
 
-You should see a **green** banner showing `Production`, `PostgreSQL`, and the API key as **Configured**.
+You should now see a **green banner** showing:
+
+```
+ASPNETCORE_ENVIRONMENT   Production
+Database provider        PostgreSQL (Docker container)
+```
 
 ```bash
 docker compose down
 ```
 
-> **Discussion:** The seed data appears even in a fresh Postgres container.
-> Where does it come from? (Hint: look at `AppDbContext.OnModelCreating` and
-> `EnsureCreated` in `Program.cs`.)
+> **Discussion:** You changed two lines of code. The connection string itself did not change.
+> What actually caused the app to switch databases?
 
 ---
 
-## Step 5 - Compare the Two Environments
+## Step 4 — Compare the Two Environments
 
 | Concern | Development (`dotnet run`) | Production (`docker compose up`) |
 |---|---|---|
 | `ASPNETCORE_ENVIRONMENT` | `Development` | `Production` |
+| Set by | `launchSettings.json` | `docker-compose.yml` |
 | Database provider | SQLite | PostgreSQL |
 | Connection string source | `appsettings.Development.json` | `docker-compose.yml` env var |
-| API key source | `dotnet user-secrets` | `.env` -> `docker-compose.yml` env var |
+| Config file loaded | `appsettings.Development.json` | `appsettings.Production.json` |
 | Secrets in any committed file | None | None |
 
-> **Key insight:** The same codebase, with zero code changes, runs correctly in both
-> environments because configuration is injected from the outside, not baked into the code.
+> **Key insight:** The same codebase, with zero code changes at runtime, behaves
+> differently in each environment because configuration is injected from outside
+> the application — not baked into the code.
 
 ---
 
-## Challenge - Key Rotation
+## The Two Rules
 
-A security best practice is to rotate API keys regularly, or immediately when a key
-is suspected to be compromised.
+1. **Use environment-specific config files for non-secret settings.**
+   `appsettings.Development.json` for local paths and dev-only logging.
+   `appsettings.Production.json` for production log levels and feature flags.
 
-**With a hardcoded key:** edit source -> commit -> push -> redeploy
-
-**With configuration-based secrets:** update one value -> restart the app
-
-### Get the challenge tests green
-
-```bash
-dotnet test --filter KeyRotation
-```
-
-These tests verify:
-1. After rotating to a new key, the new key is accepted and the old key is rejected
-2. Dev and production can have different keys - a dev key leak does not compromise production
-
-If you completed Step 3 correctly, these should already pass. Confirm:
-
-```bash
-dotnet test
-```
-
-```
-Passed! -  Total: 7, Failed: 0, Succeeded: 7, Skipped: 0
-```
-
-### Simulate rotation without changing any code
-
-**In development:**
-
-```bash
-dotnet user-secrets set "RatingsApi:ApiKey" "sk-dev-rotated-2025" --project src/LightningLab3
-dotnet run --project src/LightningLab3
-```
-
-Navigate to the Game Library - the key badge still shows **Configured** with the new key's
-last 4 characters. No code was touched.
-
-**In production (Docker):**
-
-```bash
-docker compose down
-# Edit .env, change RATINGS_API_KEY to a new value
-docker compose up --build
-```
-
-New key in use. No code changes, no new commit, no new Docker image.
-
-> **Discussion:** In real production, `.env` would not exist on the server. Variables
-> would be injected by your cloud platform - Azure App Service, AWS ECS, Kubernetes Secrets.
-> The principle is identical.
-
----
-
-## The Three Rules
-
-1. **Never hardcode secrets in source code.** They end up in git history forever.
-
-2. **Use environment-specific config files for non-secret settings.**
-   `appsettings.Development.json` for local paths, `appsettings.Production.json` for
-   production log levels and feature flags.
-
-3. **Inject secrets from outside the codebase.**
-   `dotnet user-secrets` for local development.
+2. **Inject environment identity from outside the codebase.**
+   `launchSettings.json` for local dev (not deployed).
    Environment variables (from Docker or your cloud provider) everywhere else.
 
 ---
@@ -382,40 +207,43 @@ New key in use. No code changes, no new commit, no new Docker image.
 
 ### What to emphasize
 
-- **The `appsettings` layering order** - draw it on a whiteboard before students start.
-  Many students assume `appsettings.Development.json` completely replaces `appsettings.json`,
-  when it actually merges and overrides on a key-by-key basis.
+- **Draw the config loading chain on a whiteboard before students start.**
+  Many students assume `appsettings.Development.json` *replaces* `appsettings.json`.
+  It does not — it *merges* and overrides on a key-by-key basis.
 
-- **Where user-secrets are stored** - show students the actual file on disk.
-  On Windows: `%APPDATA%\Microsoft\UserSecrets\{guid}\secrets.json`
-  The GUID matches `<UserSecretsId>` in the `.csproj`. This is why secrets do not follow
-  the repo when someone clones it on a new machine.
-
-- **The double-underscore syntax** in `docker-compose.yml`.
+- **The `__` double-underscore syntax** in `docker-compose.yml`.
   `ConnectionStrings__DefaultConnection` maps to `ConnectionStrings:DefaultConnection` in JSON.
   Students who use a single underscore will get a "connection string not found" crash.
+
+- **`launchSettings.json` is never deployed.**
+  This is why the environment variable must be set externally in Docker/cloud.
+  Ask: "If launchSettings.json doesn't exist on the server, how does production know its environment?"
+
+- **Point out `Program.cs:31-34`** — the `IsDevelopment()` check for the error handler
+  is already there and working before students make any change. It is a free demonstration
+  that the environment flag is already controlling behavior.
 
 ### Common mistakes
 
 | Mistake | Symptom | Fix |
 |---|---|---|
-| Editing `appsettings.json` instead of `appsettings.Development.json` | App works locally but Docker crashes with wrong path | Ask: "which appsettings file does Docker load?" |
-| Forgetting `dotnet user-secrets init` | `set` command throws an error | Run `init` first - it adds `<UserSecretsId>` to the `.csproj` |
 | Single underscore in env var names | Config key not found at runtime | Remind them: `__` maps to `:` in .NET config |
-| Not copying `.env.example` to `.env` | Docker crashes - `RATINGS_API_KEY` is empty | Run `docker compose config` to inspect resolved env vars |
+| Not copying `.env.example` to `.env` | Docker crashes — `DB_PASSWORD` is empty | Run `docker compose config` to inspect resolved env vars |
 | Running `docker compose up` without `--build` after code changes | Old Docker image is used | Always use `docker compose up --build` |
+| Adding `UseNpgsql` without fixing the `using` / package reference | Build error | `Npgsql.EntityFrameworkCore.PostgreSQL` is already in the `.csproj` |
 
 ### Discussion questions
 
 - Why is `appsettings.Development.json` safe to commit, but `.env` is not?
-- If a developer accidentally pushes a real API key to a public repo, what should they do?
-  *(Rotate and revoke immediately. Deleting the commit is not enough - forks and caches may already have it.)*
-- What is the difference between `dotnet user-secrets` and environment variables?
-  When would you use one over the other?
-- How would you handle secrets in a CI/CD pipeline?
-  *(GitHub Actions secrets, Azure Key Vault, AWS Secrets Manager - same principle, different tool.)*
+- What would happen if you set `ASPNETCORE_ENVIRONMENT=Production` locally
+  and ran `dotnet run`? Try it.
+- In real production, `.env` would not exist on the server. Variables would be injected
+  by your cloud platform — Azure App Service, AWS ECS, Kubernetes Secrets.
+  The principle is identical: one env var controls everything.
+- How would a CI/CD pipeline know which environment to target?
 
 ### Verifying completion
 
-Ask each student to run `dotnet test` and show you the output.
-All 7 green plus a running Docker container confirms every step is complete.
+Ask each student to show:
+1. `dotnet run` → blue Development banner at http://localhost:5101/games
+2. `docker compose up --build` → green Production banner at http://localhost:8080/games

@@ -10,7 +10,6 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=db;Database=gamesdb;Username=postgres;Password=${DB_PASSWORD:-devpassword}
-      - RatingsApi__ApiKey=${RATINGS_API_KEY}
     depends_on:
       db:
         condition: service_healthy
