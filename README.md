@@ -120,11 +120,14 @@ docker compose up --build
 Watch the logs. The app will crash with an error similar to:
 
 ```
-ArgumentException: Format of the initialization string does not conform to specification...
+Unhandled exception. System.ArgumentException: Connection string keyword 'host' is not supported.
+   at Microsoft.Data.Sqlite.SqliteConnectionStringBuilder...
+   at Program.<Main>$(String[] args) in Program.cs:line 25
 ```
 
-SQLite is trying to interpret the PostgreSQL connection string (`Host=db;Database=...`)
-as a file path. That is the bug.
+SQLite is trying to parse the PostgreSQL connection string (`Host=db;Database=...`) and
+does not recognise the `host` keyword — because that is a PostgreSQL concept, not SQLite.
+That is the bug.
 
 > **Discussion:** Trace why Docker gets a different connection string than `dotnet run`.
 > Start at `docker-compose.yml` → `ConnectionStrings__DefaultConnection` →

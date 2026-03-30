@@ -11,7 +11,7 @@ builder.Services.AddRazorComponents()
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-// TODO (Lab - Step 4): This always uses SQLite — even when running in Docker against PostgreSQL.
+// TODO (Lab - Step 3): This always uses SQLite — even when running in Docker against PostgreSQL.
 // Fix this by switching the database provider based on the current environment.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
