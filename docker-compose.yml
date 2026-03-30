@@ -9,7 +9,7 @@ services:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=db;Database=gamesdb;Username=postgres;Password=${DB_PASSWORD:-devpassword}
+      - ConnectionStrings__DefaultConnection=Host=db;Database=gamesdb;Username=postgres;Password=${DB_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
