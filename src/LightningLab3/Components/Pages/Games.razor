@@ -1,0 +1,113 @@
+@page "/games"
+@rendermode InteractiveServer
+@using LightningLab3.Data
+@using LightningLab3.Models
+@using LightningLab3.Services
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext DbContext
+@inject RatingsService RatingsService
+@inject IWebHostEnvironment Env
+@inject IConfiguration Config
+
+<PageTitle>Game Library</PageTitle>
+
+<h1>Game Library</h1>
+
+<div class="card mb-4 border-@(Env.IsDevelopment() ? "primary" : "success")">
+    <div class="card-header text-white bg-@(Env.IsDevelopment() ? "primary" : "success")">
+        Runtime Environment
+    </div>
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">ASPNETCORE_ENVIRONMENT</dt>
+            <dd class="col-sm-9"><code>@Env.EnvironmentName</code></dd>
+
+            <dt class="col-sm-3">Database provider</dt>
+            <dd class="col-sm-9">
+                <code>@(Env.IsDevelopment() ? "SQLite  (local file — games.db)" : "PostgreSQL  (Docker container)")</code>
+            </dd>
+
+            <dt class="col-sm-3">Ratings API key</dt>
+            <dd class="col-sm-9">
+                @{
+                    var apiKey = Config["RatingsApi:ApiKey"];
+                    var suffix = !string.IsNullOrEmpty(apiKey) && apiKey.Length >= 4
+                        ? apiKey[^4..]
+                        : null;
+                }
+                @if (suffix is null)
+                {
+                    <span class="badge bg-danger">Not configured</span>
+                    <small class="text-muted ms-2">— set RatingsApi__ApiKey in user-secrets or env vars</small>
+                }
+                else
+                {
+                    <span class="badge bg-success">Configured</span>
+                    <small class="text-muted ms-2">(ends in <code>...@suffix</code>)</small>
+                }
+            </dd>
+        </dl>
+    </div>
+</div>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">
+        <strong>Database error:</strong> @errorMessage
+        <hr />
+        <small>Check that your connection string is correct for this environment.</small>
+    </div>
+}
+else if (games is null)
+{
+    <p><em>Loading games...</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Genre</th>
+                <th>Platform</th>
+                <th>Year</th>
+                <th>Community Rating</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var game in games)
+            {
+                <tr>
+                    <td>@game.Title</td>
+                    <td>@game.Genre</td>
+                    <td>@game.Platform</td>
+                    <td>@game.ReleaseYear</td>
+                    <td>@(ratings.TryGetValue(game.Id, out var r) ? $"{r} / 10" : "N/A")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Game>? games;
+    private Dictionary<int, int> ratings = new();
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            games = await DbContext.Games.ToListAsync();
+
+            foreach (var game in games)
+            {
+                ratings[game.Id] = await RatingsService.GetRatingAsync(game.Title);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+}

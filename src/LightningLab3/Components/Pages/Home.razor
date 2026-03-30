@@ -1,0 +1,57 @@
+@page "/"
+
+<PageTitle>Lightning Lab 3 — Keeping Secrets Secret</PageTitle>
+
+<h1>Lightning Lab 3</h1>
+<h2 class="text-muted">Keeping Secrets Secret: Dev vs Production</h2>
+
+<hr />
+
+<p class="lead">
+    This app is intentionally broken in three different ways. Your job is to find each bug,
+    understand <em>why</em> it is a problem, and fix it.
+</p>
+
+<div class="row g-3 mt-2">
+    <div class="col-md-4">
+        <div class="card h-100 border-danger">
+            <div class="card-header bg-danger text-white">Bug 1 — Wrong Connection String</div>
+            <div class="card-body">
+                <p class="card-text">
+                    The database path in <code>appsettings.json</code> only works on one specific machine.
+                    Try running the app and observe what happens.
+                </p>
+                <span class="badge bg-secondary">Step 2 of the lab</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border-danger">
+            <div class="card-header bg-danger text-white">Bug 2 — Hardcoded API Key</div>
+            <div class="card-body">
+                <p class="card-text">
+                    A secret API key is written directly into <code>RatingsService.cs</code>.
+                    Anyone who clones this repo can see it — and it will live in git history forever.
+                </p>
+                <span class="badge bg-secondary">Step 3 of the lab</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border-danger">
+            <div class="card-header bg-danger text-white">Bug 3 — Wrong Database in Docker</div>
+            <div class="card-body">
+                <p class="card-text">
+                    <code>Program.cs</code> always uses SQLite, even in production where
+                    PostgreSQL is running in Docker. The app must switch providers based on environment.
+                </p>
+                <span class="badge bg-secondary">Step 4 of the lab</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-4">
+    <strong>Where to start:</strong> Open <code>README.md</code> in the root of the repo
+    and follow the steps. Run <code>dotnet test</code> at any time to check your progress.
+</div>

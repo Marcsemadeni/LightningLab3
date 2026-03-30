@@ -1,0 +1,25 @@
+## ── Secrets — NEVER commit these ────────────────────────────────────────────
+.env
+*.env
+!.env.example
+
+## ── .NET ─────────────────────────────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+.vscode/
+*.swp
+
+## ── EF Core local database files ─────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+
+## ── dotnet user-secrets store is already outside the repo, but just in case ──
+secrets.json
+
+## ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

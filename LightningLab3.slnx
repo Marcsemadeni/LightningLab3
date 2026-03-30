@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LightningLab3/LightningLab3.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LightningLab3.Tests/LightningLab3.Tests.csproj" />
+  </Folder>
+</Solution>
