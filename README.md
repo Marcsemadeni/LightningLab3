@@ -1,18 +1,7 @@
 # Lightning Lab 3 - Keeping Secrets Secret
 
 **Topic:** Environment Configuration and Secrets Management (Dev vs Production)
-**Time:** ~30 minutes
 **Stack:** .NET 10 - Blazor Web App - EF Core - SQLite (dev) - PostgreSQL (prod) - Docker
-
----
-
-## What You Will Learn
-
-- Why hardcoding secrets and paths directly in code is dangerous
-- How .NET's layered `appsettings` system lets each environment have its own config
-- How to store secrets locally with `dotnet user-secrets` instead of in source files
-- How to pass secrets into Docker containers through environment variables
-- Why configuration-based secrets make key rotation safe and instant - no code changes needed
 
 ---
 
@@ -53,7 +42,7 @@ LightningLab3/
 
 ## Step 1 - Clone and Run the Tests
 
-Clone the repo (or open it if you already have it), then run:
+Clone the repo, then run:
 
 ```bash
 dotnet test
@@ -62,7 +51,7 @@ dotnet test
 You should see:
 
 ```
-Failed! - Failed: 4, Passed: 3, Skipped: 0, Total: 7
+Failed! -  Total: 7, Failed: 4, Succeeded: 3, Skipped: 0
 ```
 
 The 4 failing tests are not accidents - they describe exactly what is broken.
@@ -214,7 +203,7 @@ dotnet test
 Expected result:
 
 ```
-Failed! - Failed: 2, Passed: 5, Skipped: 0, Total: 7
+Failed! -  Total: 7, Failed: 2, Succeeded: 5, Skipped: 0
 ```
 
 **5.** Run the app and navigate to **http://localhost:5101/games**.
@@ -344,7 +333,7 @@ dotnet test
 ```
 
 ```
-Passed! - Failed: 0, Passed: 7, Skipped: 0, Total: 7
+Passed! -  Total: 7, Failed: 0, Succeeded: 7, Skipped: 0
 ```
 
 ### Simulate rotation without changing any code
